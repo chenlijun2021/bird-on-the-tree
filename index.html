@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ama's Tree - The Circular Flight</title>
+    <title>Ama's Tree - High Precision Rendering</title>
     <style>
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
@@ -12,7 +12,7 @@
             -webkit-tap-highlight-color: transparent;
             transition: background-color 0.5s;
         }
-        canvas { display: block; }
+        canvas { display: block; width: 100%; height: 100%; }
         
         /* 设置面板样式 */
         #settings-panel {
@@ -112,7 +112,7 @@
         const leafColorInput = document.getElementById('leafColor');
         const textColorInput = document.getElementById('textColor');
 
-        let width, height;
+        let width, height, dpr;
         let particles = [];
         let currentMode = 'tree'; // 'tree' 或 'poem'
         let transitionStartTime = 0;
@@ -153,8 +153,23 @@
         document.body.style.backgroundColor = colors.bg;
 
         function resize() {
-            width = canvas.width = treeCanvas.width = window.innerWidth || 300;
-            height = canvas.height = treeCanvas.height = window.innerHeight || 300;
+            // 获取像素比，默认为 1，高分屏通常为 2 或 3
+            dpr = window.devicePixelRatio || 1;
+            
+            // 逻辑尺寸
+            width = window.innerWidth || 300;
+            height = window.innerHeight || 300;
+
+            // 设置 Canvas 绘图表面尺寸 (物理像素)
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            treeCanvas.width = width * dpr;
+            treeCanvas.height = height * dpr;
+
+            // 缩放上下文，确保后续绘图命令使用逻辑像素
+            ctx.scale(dpr, dpr);
+            tctx.scale(dpr, dpr);
+
             initScene();
         }
 
@@ -231,7 +246,12 @@
         }
 
         function drawTreeToBuffer() {
-            tctx.clearRect(0,0,width,height);
+            // 注意：由于 scale 已经应用，只需按逻辑坐标清除并重绘
+            tctx.save();
+            tctx.setTransform(1, 0, 0, 1, 0, 0); // 暂时重置变换以清除整个物理像素区域
+            tctx.clearRect(0,0,treeCanvas.width,treeCanvas.height);
+            tctx.restore();
+
             tctx.strokeStyle = colors.branch;
             tctx.lineCap = 'round';
             branches.forEach(b => {
@@ -241,14 +261,24 @@
         }
 
         function render(time) {
-            ctx.clearRect(0,0,width,height);
+            // 清除当前画布
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.restore();
             
             let targetTreeAlpha = (currentMode === 'tree' && transitionStartTime === 0) ? 1.0 : 0.1;
             if (transitionStartTime !== 0) targetTreeAlpha = 0.2;
             treeOpacity += (targetTreeAlpha - treeOpacity) * 0.03;
             
             ctx.globalAlpha = treeOpacity;
-            if(treeCanvas.width > 0) ctx.drawImage(treeCanvas, 0, 0);
+            if(treeCanvas.width > 0) {
+                // 绘制 buffer 时需考虑 dpr，因为我们是 1:1 绘制物理像素到物理像素
+                ctx.save();
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.drawImage(treeCanvas, 0, 0);
+                ctx.restore();
+            }
             ctx.globalAlpha = 1.0;
 
             ctx.font = 'italic 16px "Georgia", serif';
@@ -382,6 +412,7 @@
         }, {passive: false});
 
         window.addEventListener('resize', resize);
+        // 初始化 resize
         resize();
         requestAnimationFrame(render);
     </script>
